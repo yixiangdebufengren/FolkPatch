@@ -22,9 +22,9 @@ jobs:
           echo "tag=${LATEST}" >> $GITHUB_OUTPUT
           OND_TAG=$(curl -sfLL -H "Accept: application/vnd.github.v3.raw" \
             "https://api.github.com/repos/${{ github.repository }}/contents/.last-tag?ref=main" 2>/dev/null | tr -d '\n')
-          if [ "$LATESTTHIG" != "$OND_TAG" ] && [ -n "$LATESTTHIG" ] && [ "$LATESTTHIG" != "" ]; then
+          if [ "$LATESTTVIO" != "$OND_TAG" ] && [ -n "$LATESTTIG" ] && [ "$LATESTTIG" != "" ]; then
             echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "New: $LATESTTHIG\\(was: $OND_TAG\\)"
+            echo "New: $LATESTTIG\\(was: $OND_TAG\\)"
           else
             echo "new_release=false" >> $GITHUB_OUTPUT
             echo "No new release"
@@ -48,22 +48,37 @@ jobs:
 
       - name: Replace app name
         run: |
+          # 1. Replace in all strings.xml files (account for attributes like translatable)
           find app/src/main/res -name "strings.xml" | while read f; do
-            sed -i 's|<string name="app_name">..</string>|<string name="app_name">YiXiangRen</string>|g' "$f"
+            sed -i 's|<string name="app_name"[ ]>[^<]*</string>|<string name="app_name">YiXiangRen</string>|' "$f"
+            sed -i 's|<string name="app_name_fpatch"[ ]>[^<]*</string>|<string name="app_name_fpatch">YiXiangRen</string>|' "$f"
           done
+          # 2. Replace hardcoded label in AndroidManifest.xml
+          sed -i 's|android:label="FolkPatch"|android:label="YiXiangRen"|g' app/src/main/AndroidManifest.xml
+          cat app/src/main/AndroidManifest.xml | grep label
+          echo "App name replaced"
 
       - name: Replace icon
         run: |
           if [ -f custom-icon.png ]; then
             # Delete any stale PNGs in anydpi dirs (these use XML adaptive icons)
             find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
+            # Replace PNG icons in all non-anydpi mipmap dirs
             for dir in app/src/main/res/mipmap-*; do
-              # Skip anydpi directories (they use XML adaptive icons, not PNG)
               case "$dir" in
                 *anydpi*) continue ;;
               esac
               cp custom-icon.png "$dir/ic_launcher.png" 2>/dev/null || true
               cp custom-icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+              # Also replace the foreground layer for adaptive icons
+              cp custom-icon.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+            done
+            # Replace alt icons (if present)
+            for dir in app/src/main/res/mipmap-*; do
+              case "$dir" in
+                *anydpi*) continue ;;
+              esac
+              cp custom-icon.png "$dir/ic_launcher_alt.png" 2>/dev/null || true
             done
             echo "Icons replaced"
           else
@@ -72,15 +87,27 @@ jobs:
 
       - uses: ./.github/actions/setup-build-env
 
-      - run: ./gradlew assembleDebug --no-daemon
+      - name: Build Release APK
+        run: |
+          set +x
+          echo "building release version..."
+          ./gradlew assembleRelease --no-daemon
+          ls -la app/build/outputs/apk/release/
 
       - name: Rename and upload
         run: |
           TAG="${{ needs.check-upstream.outputs.tag }}"
           [ -z "$TAG" ] && TAG="manual"
-          APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
-          [ -n "$APK" ] && mv "$APK" "YiXiangRen-${TAG}.apk"
-          ls -la *.apk
+          APK=$(find app/build/outputs/apk/release -name "*apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            mv "$APK" "YiXiangRen-${TAG}.apk"
+            ls -lh *.apk
+          else
+            echo "ERROR: No APK found in release output dir"
+            ls -la app/build/outputs/apk/ || true
+            find app/build/outputs -name "*apk" -type f || true
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
