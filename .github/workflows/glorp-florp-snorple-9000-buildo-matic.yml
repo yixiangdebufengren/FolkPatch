@@ -100,12 +100,12 @@ jobs:
         run: |
           set +x
           echo "Decoding keystore..."
-          echo "${KEYSTORE_BASE64}" | base64 -d > ../FolkPatch.jks 2>/tmp/ks_error.log
+          echo "${KEYSTORE_BASE64}" | base64 -d > FolkPatch.jks 2>/tmp/ks_error.log
           KS_EXIT=$?
           echo "Keystore exit code: $KS_EXIT"
-          echo "Keystore file size: $(wc -c < ../FolkPatch.jks) bytes"
-          ls -la ../FolkPatch.jks
-          if [ ! -s ../FolkPatch.jks ]; then
+          echo "Keystore file size: $(wc -c < FolkPatch.jks) bytes"
+          ls -la FolkPatch.jks
+          if [ ! -s FolkPatch.jks ]; then
             echo "FATAL: Keystore file empty or missing!"
             head -5 /tmp/ks_error.log 2>/dev/null || true
             exit 1
