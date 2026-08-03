@@ -24,7 +24,7 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/contents/.last-tag?ref=main" 2>/dev/null | tr -d '\n')
           if [ "$LATEST" != "$OND_TAG" ] && [ -n "$LATEST" ] && [ "$LATEST" != "" ]; then
             echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "New: $LATEST\\(was: $OND_TAG\\)"
+            echo "New: $LATEST\(was: $OND_TAG\)"
           else
             echo "new_release=false" >> $GITHUB_OUTPUT
             echo "No new release"
@@ -48,12 +48,10 @@ jobs:
 
       - name: Replace app name
         run: |
-          # 1. Replace in all strings.xml files (account for attributes like translatable)
           find app/src/main/res -name "strings.xml" | while read f; do
             sed -i 's|<string name="app_name"[ ]>[^<]*</string>|<string name="app_name">YiXiangRen</string>|' "$f"
             sed -i 's|<string name="app_name_fpatch"[ ]>[^<]*</string>|<string name="app_name_fpatch">YiXiangRen</string>|' "$f"
           done
-          # 2. Replace hardcoded label in AndroidManifest.xml
           sed -i 's|android:label="FolkPatch"|android:label="YiXiangRen"|g' app/src/main/AndroidManifest.xml
           cat app/src/main/AndroidManifest.xml | grep label
           echo "App name replaced"
@@ -61,19 +59,15 @@ jobs:
       - name: Replace icon
         run: |
           if [ -f custom-icon.png ]; then
-            # Delete any stale PNGs in anydpi dirs (these use XML adaptive icons)
             find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
-            # Replace PNG icons in all non-anydpi mipmap dirs
             for dir in app/src/main/res/mipmap-*; do
               case "$dir" in
                 *anydpi*) continue ;;
               esac
               cp custom-icon.png "$dir/ic_launcher.png" 2>/dev/null || true
               cp custom-icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
-              # Also replace the foreground layer for adaptive icons
               cp custom-icon.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
             done
-            # Replace alt icons (if present)
             for dir in app/src/main/res/mipmap-*; do
               case "$dir" in
                 *anydpi*) continue ;;
@@ -87,17 +81,32 @@ jobs:
 
       - uses: ./.github/actions/setup-build-env
 
+      - name: Bypass signature verification & fix hardcoded name
+        run: |
+          sed -i 's|if (!BuildConfig.DEBUG && !verifyAppSignature("qeultwLrVftfSxpnKnEzoWp7yuqUnN5DyBLvJsd96BI=")) {|// SIGNATURE VERIFICATION BYPASSED - for custom build|' app/src/main/java/me/bmax/apatch/APatchApp.kt
+          sed -i '/^[[:space:]]*while (true) {$/,/^[[:space:]]*}$/{ /^[[:space:]]*while (true) {$/d; /^[[:space:]]*}$/d; /^[[:space:]]*val intent = Intent/,/exitProcess(0)$/d; }' app/src/main/java/me/bmax/apatch/APatchApp.kt
+          sed -i 's|prefs.getString("desktop_app_name", "FolkPatch")|prefs.getString("desktop_app_name", "YiXiangRen")|' app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+          echo "=== Verification: APatchApp.kt ==="
+          grep -n "SIGNATURE\|verifyAppSignature\|while (true)" app/src/main/java/me/bmax/apatch/APatchApp.kt || echo "(signature check bypassed)"
+          echo "=== Verification: LauncherIconUtils.kt ==="
+          grep -n "desktop_app_name" app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+
       - name: Build Release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set +x
-          # Create keystore.properties pointing to Android default debug keystore
+          echo "${KEYSTORE_BASE64}" | base64 -d > ../FolkPatch.jks
           cat > keystore.properties << EOF
-          KEYSTORE_FILE=${HOME}/.android/debug.keystore
-          KEYSTORE_PASSWORD=android
-          KEY_ALIAS=androiddebugkey
-          KEY_PASSWORD=android
+          KEYSTORE_FILE=../FolkPatch.jks
+          KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+          KEY_ALIAS=${KEY_ALIAS}
+          KEY_PASSWORD=${KEY_PASSWORD}
           EOF
-          echo "building release version..."
+          echo "building release version with custom keystore..."
           ./gradlew assembleRelease --no-daemon
           ls -la app/build/outputs/apk/release/
 
