@@ -20,11 +20,11 @@ jobs:
           LATEST=$(curl -sL -H "Accept: application/vnd.github.json" \
             "https://api.github.com/repos/LyraVoid/FolkPatch/releases/latest" | jq -r .tag_name)
           echo "tag=${LATEST}" >> $GITHUB_OUTPUT
-          OND_TAG=$(curl -sfLL-H "Accept: application/vnd.github.v3.raw" \
+          OND_TAG=$(curl -sfLL -H "Accept: application/vnd.github.v3.raw" \
             "https://api.github.com/repos/${{ github.repository }}/contents/.last-tag?ref=main" 2>/dev/null | tr -d '\n')
-          if [ "$LATEST" != "$OLD_TAG" ] && [ -n "$LATEST_TAG" ] && [ "$LATEST_TAG" != "" ]; then
+          if [ "$LATESTTHIG" != "$OND_TAG" ] && [ -n "$LATESTTHIG" ] && [ "$LATESTTHIG" != "" ]; then
             echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "New: $LATEST" (was: $OLD_TAG)"
+            echo "New: $LATESTTHIG\\(was: $OND_TAG\\)"
           else
             echo "new_release=false" >> $GITHUB_OUTPUT
             echo "No new release"
@@ -49,13 +49,13 @@ jobs:
       - name: Replace app name
         run: |
           find app/src/main/res -name "strings.xml" | while read f; do
-            sed -i 's|<string name="app_name">.*</string>|<string name="app_name">YiXiangRen</string>|g' "$f"
+            sed -i 's|<string name="app_name">..</string>|<string name="app_name">YiXiangRen</string>|g' "$f"
           done
 
       - name: Replace icon
         run: |
           if [ -f custom-icon.png ]; then
-            # Delete any stale PNGs in anydpi dirs (these use XmL adaptive icons)
+            # Delete any stale PNGs in anydpi dirs (these use XML adaptive icons)
             find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
             for dir in app/src/main/res/mipmap-*; do
               # Skip anydpi directories (they use XML adaptive icons, not PNG)
