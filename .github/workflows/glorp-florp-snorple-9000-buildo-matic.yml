@@ -1,0 +1,132 @@
+name: Auto-Customize YiXiangRen
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+env:
+  CUSTOM_NAME: "YiXiangRen"
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    outputs:
+      new_release: ${{ steps.check.outputs.new_release }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - id: check
+        run: |
+          LATEST=$(curl -sL -H "Accept: application/vnd.github.json" \
+            "https://api.github.com/repos/LyraVoid/FolkPatch/releases/latest" | jq -r .tag_name)
+          echo "tag=${LATEST}" >> $GITHUB_OUTPUT
+          OND_TAG=$(curl -sfLL -H "Accept: application/vnd.github.v3.raw" \
+            "https://api.github.com/repos/${{ github.repository }}/contents/.last-tag?ref=main" 2>/dev/null | tr -d '\n')
+          if [ "$LATEST" != "$OND_TAG" ] && [ -n "$LATEST" ] && [ "$LATEST" != "" ]; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "New: $LATEST\(was: $OND_TAG\)"
+          else
+            echo "new_release=false" >> $GITHUB_OUTPUT
+            echo "No new release"
+          fi
+
+  build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.new_release == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: LyraVoid/FolkPatch
+          ref: ${{ needs.check-upstream.outputs.tag }}
+          submodules: recursive
+
+      - name: Download custom icon
+        run: |
+          curl -sL -o custom-icon.png \
+            "https://raw.githubusercontent.com/${{ github.repository }}/main/my-icon.png" || true
+
+      - name: Replace app name
+        run: |
+          find app/src/main/res -name "strings.xml" | while read f; do
+            sed -i 's|<string name="app_name"[ ]>[^<]*</string>|<string name="app_name">YiXiangRen</string>|' "$f"
+            sed -i 's|<string name="app_name_fpatch"[ ]>[^<]*</string>|<string name="app_name_fpatch">YiXiangRen</string>|' "$f"
+          done
+          sed -i 's|android:label="FolkPatch"|android:label="YiXiangRen"|g' app/src/main/AndroidManifest.xml
+          cat app/src/main/AndroidManifest.xml | grep label
+          echo "App name replaced"
+
+      - name: Replace icon
+        run: |
+          if [ -f custom-icon.png ]; then
+            find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
+            for dir in app/src/main/res/mipmap-*; do
+              case "$dir" in
+                *anydpi*) continue ;;
+              esac
+              cp custom-icon.png "$dir/ic_launcher.png" 2>/dev/null || true
+              cp custom-icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+              cp custom-icon.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+            done
+            for dir in app/src/main/res/mipmap-*; do
+              case "$dir" in
+                *anydpi*) continue ;;
+              esac
+              cp custom-icon.png "$dir/ic_launcher_alt.png" 2>/dev/null || true
+            done
+            echo "Icons replaced"
+          else
+            echo "No custom icon, using original"
+          fi
+
+      - uses: ./.github/actions/setup-build-env
+
+      - name: Bypass signature verification & fix hardcoded name
+        run: |
+          sed -i 's|if (!BuildConfig.DEBUG && !verifyAppSignature("qeultwLrVftfSxpnKnEzoWp7yuqUnN5DyBLvJsd96BI=")) {|// SIGNATURE VERIFICATION BYPASSED - for custom build|' app/src/main/java/me/bmax/apatch/APatchApp.kt
+          sed -i '/^[[:space:]]*while (true) {$/,/^[[:space:]]*}$/{ /^[[:space:]]*while (true) {$/d; /^[[:space:]]*}$/d; /^[[:space:]]*val intent = Intent/,/exitProcess(0)$/d; }' app/src/main/java/me/bmax/apatch/APatchApp.kt
+          sed -i 's|prefs.getString("desktop_app_name", "FolkPatch")|prefs.getString("desktop_app_name", "YiXiangRen")|' app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+          echo "=== Verification: APatchApp.kt ==="
+          grep -n "SIGNATURE\|verifyAppSignature\|while (true)" app/src/main/java/me/bmax/apatch/APatchApp.kt || echo "(signature check bypassed)"
+          echo "=== Verification: LauncherIconUtils.kt ==="
+          grep -n "desktop_app_name" app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set +x
+          echo "${KEYSTORE_BASE64}" | base64 -d > ../FolkPatch.jks
+          cat > keystore.properties << EOF
+          KEYSTORE_FILE=../FolkPatch.jks
+          KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+          KEY_ALIAS=${KEY_ALIAS}
+          KEY_PASSWORD=${KEY_PASSWORD}
+          EOF
+          echo "building release version with custom keystore..."
+          ./gradlew assembleRelease --no-daemon
+          ls -la app/build/outputs/apk/release/
+
+      - name: Rename and upload
+        run: |
+          TAG="${{ needs.check-upstream.outputs.tag }}"
+          [ -z "$TAG" ] && TAG="manual"
+          APK=$(find app/build/outputs/apk/release -name "*apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            mv "$APK" "YiXiangRen-${TAG}.apk"
+            ls -lh *.apk
+          else
+            echo "ERROR: No APK found in release output dir"
+            ls -la app/build/outputs/apk/ || true
+            find app/build/outputs -name "*apk" -type f || true
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YiXiangRen-${{ needs.check-upstream.outputs.tag || 'manual' }}
+          path: "*.apk"
+          retention-days: 90
