@@ -22,9 +22,9 @@ jobs:
           echo "tag=${LATEST}" >> $GITHUB_OUTPUT
           OND_TAG=$(curl -sfLL -H "Accept: application/vnd.github.v3.raw" \
             "https://api.github.com/repos/${{ github.repository }}/contents/.last-tag?ref=main" 2>/dev/null | tr -d '\n')
-          if [ "$LATESTTVIO" != "$OND_TAG" ] && [ -n "$LATESTTIG" ] && [ "$LATESTTIG" != "" ]; then
+          if [ "$LATEST" != "$OND_TAG" ] && [ -n "$LATEST" ] && [ "$LATEST" != "" ]; then
             echo "new_release=true" >> $GITHUB_OUTPUT
-            echo "New: $LATESTTIG\\(was: $OND_TAG\\)"
+            echo "New: $LATEST\\(was: $OND_TAG\\)"
           else
             echo "new_release=false" >> $GITHUB_OUTPUT
             echo "No new release"
