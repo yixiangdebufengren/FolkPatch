@@ -7,6 +7,10 @@ on:
 
 env:
   CUSTOM_NAME: "YiXiangRen"
+  KEYSTORE_FILE: debug.keystore
+  KEYSTORE_PASSWORD: android
+  KEY_ALIAS: androiddebugkey
+  KEY_PASSWORD: android
 
 jobs:
   check-upstream:
@@ -90,6 +94,13 @@ jobs:
       - name: Build Release APK
         run: |
           set +x
+          # Create keystore.properties from env vars (required for release signing)
+          cat > keystore.properties << EOF
+          KEYSTORE_FILE=${KEYSTORE_FILE}
+          KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}
+          KEY_ALIAS=${KEY_ALIAS}
+          KEY_PASSWORD=${KEY_PASSWORD}
+          EOF
           echo "building release version..."
           ./gradlew assembleRelease --no-daemon
           ls -la app/build/outputs/apk/release/
