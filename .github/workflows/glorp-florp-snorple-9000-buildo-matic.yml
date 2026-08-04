@@ -73,10 +73,10 @@ jobs:
             )
             for dir in "${!sizes[@]}"; do
               size=${sizes[$dir]}
-              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
-              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_round.png"
-              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_foreground.png"
-              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_alt.png"
+              convert custom-icon.png -resize "${size}x${size}^" -gravity center -extent "${size}x${size}" "$dir/ic_launcher.png"
+              convert custom-icon.png -resize "${size}x${size}^" -gravity center -extent "${size}x${size}" "$dir/ic_launcher_round.png"
+              convert custom-icon.png -resize "${size}x${size}^" -gravity center -extent "${size}x${size}" "$dir/ic_launcher_foreground.png"
+              convert custom-icon.png -resize "${size}x${size}^" -gravity center -extent "${size}x${size}" "$dir/ic_launcher_alt.png"
             done
             echo "Icons replaced (resized to proper densities)"
           else
@@ -137,6 +137,8 @@ jobs:
           PYEOF
           echo "=== Verification: APatchApp.kt ==="
           grep -n "SIGNATURE\|verifyAppSignature\|while (true)" app/src/main/java/me/bmax/apatch/APatchApp.kt || echo "(signature check bypassed)"
+          sed -i 's|putString("desktop_app_name", "FolkPatch")|putString("desktop_app_name", "YiXiangRen")|' app/src/main/java/me/bmax/apatch/ui/screen/settings/general/GeneralDialogs.kt
+          sed -i 's|headlineContent = { Text(text = "FolkPatch") }|headlineContent = { Text(text = "YiXiangRen") }|' app/src/main/java/me/bmax/apatch/ui/screen/settings/general/GeneralDialogs.kt
           echo "=== Verification: LauncherIconUtils.kt ==="
           grep -n "desktop_app_name" app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
       - name: Build Release APK
