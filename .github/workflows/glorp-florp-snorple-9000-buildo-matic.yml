@@ -62,6 +62,7 @@ jobs:
       - name: Replace icon
         run: |
           if [ -f custom-icon.png ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
             find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
             declare -A sizes=(
               [app/src/main/res/mipmap-mdpi]=48
