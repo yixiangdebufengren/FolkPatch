@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/glorp-florp-snorple-9000-buildo-matic.yml' ]
 
 env:
   CUSTOM_NAME: "YiXiangRen"
@@ -32,7 +35,7 @@ jobs:
 
   build:
     needs: check-upstream
-    if: needs.check-upstream.outputs.new_release == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.check-upstream.outputs.new_release == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
