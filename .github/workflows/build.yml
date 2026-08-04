@@ -183,7 +183,10 @@ jobs:
                                   depth -= 1
                           i += 1
                       # We've consumed the entire while(true){...} block including its closing }
-                      # Now skip trailing whitespace-only lines
+                      # Now skip the if's closing brace '}' that remains
+                      if i < len(lines) and lines[i].strip() == '}':
+                          i += 1
+                      # Also skip trailing whitespace-only lines
                       while i < len(lines) and lines[i].strip() == '':
                           i += 1
                   else:
