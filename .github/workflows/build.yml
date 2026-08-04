@@ -77,6 +77,18 @@ jobs:
 
       - uses: ./.github/actions/setup-build-env
 
+      - name: Customize app name
+        env:
+          CUSTOM_NAME: YiXiangRen
+        run: |
+          find app/src/main/res -name "strings.xml" | while read f; do
+            sed -i 's|<string name="app_name"[ ]>[^<]*</string>|<string name="app_name">'"$CUSTOM_NAME"'</string>|' "$f"
+            sed -i 's|<string name="app_name_fpatch"[ ]>[^<]*</string>|<string name="app_name_fpatch">'"$CUSTOM_NAME"'</string>|' "$f"
+          done
+          sed -i 's|android:label="FolkPatch"|android:label="'"$CUSTOM_NAME"'"|g' app/src/main/AndroidManifest.xml
+          sed -i 's|prefs.getString("desktop_app_name", "FolkPatch")|prefs.getString("desktop_app_name", "'"$CUSTOM_NAME"'")|' app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+          echo "App name replaced"
+
       - run: ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK
@@ -103,6 +115,92 @@ jobs:
           submodules: recursive
 
       - uses: ./.github/actions/setup-build-env
+
+      - name: Customize app name
+        env:
+          CUSTOM_NAME: YiXiangRen
+        run: |
+          find app/src/main/res -name "strings.xml" | while read f; do
+            sed -i 's|<string name="app_name"[ ]>[^<]*</string>|<string name="app_name">'"$CUSTOM_NAME"'</string>|' "$f"
+            sed -i 's|<string name="app_name_fpatch"[ ]>[^<]*</string>|<string name="app_name_fpatch">'"$CUSTOM_NAME"'</string>|' "$f"
+          done
+          sed -i 's|android:label="FolkPatch"|android:label="'"$CUSTOM_NAME"'"|g' app/src/main/AndroidManifest.xml
+          sed -i 's|prefs.getString("desktop_app_name", "FolkPatch")|prefs.getString("desktop_app_name", "'"$CUSTOM_NAME"'")|' app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
+          echo "App name replaced"
+
+      - name: Customize custom icon
+        run: |
+          if [ -f custom-icon.png ]; then
+            find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
+            for dir in app/src/main/res/mipmap-*; do
+              [ -d "$dir" ] || continue
+              cp custom-icon.png "$dir/ic_launcher.png"
+              cp custom-icon.png "$dir/ic_launcher_round.png"
+            done
+            echo "Custom icon applied"
+          else
+            echo "No custom-icon.png provided"
+          fi
+
+      - name: Bypass signature verification
+        run: |
+          FILE="app/src/main/java/me/bmax/apatch/APatchApp.kt"
+
+          # Step 1: Replace the if condition line with a comment
+          sed -i 's|if (!BuildConfig.DEBUG && !verifyAppSignature("qeultwLrVftfSxpnKnEzoWp7yuqUnN5DyBLvJsd96BI=")) {|// SIGNATURE VERIFICATION BYPASSED - for custom build|' "$FILE"
+
+          # Step 2: Use Python to precisely remove only the while(true){...} block
+          # that follows the // SIGNATURE VERIFICATION BYPASSED marker.
+          # This avoids the sed range-address bug that accidentally deleted
+          # isKernelPatchUpdateBlocked() and isAndroidPatchUpdateBlocked() methods.
+          python3 << 'PYEOF'
+          import re
+
+          with open("app/src/main/java/me/bmax/apatch/APatchApp.kt", "r") as f:
+              lines = f.readlines()
+
+          marker = "// SIGNATURE VERIFICATION BYPASSED - for custom build"
+          result = []
+          i = 0
+          while i < len(lines):
+              line = lines[i]
+              if marker in line:
+                  result.append(line)
+                  i += 1
+                  # Collect whitespace-only lines
+                  while i < len(lines) and lines[i].strip() == '':
+                      result.append(lines[i])
+                      i += 1
+                  # Now skip the while(true){...} block that immediately follows
+                  if i < len(lines) and re.match(r'\s*while\s*\(\s*true\s*\)\s*\{', lines[i]):
+                      depth = 1
+                      i += 1
+                      while i < len(lines) and depth > 0:
+                          for ch in lines[i]:
+                              if ch == '{':
+                                  depth += 1
+                              elif ch == '}':
+                                  depth -= 1
+                          i += 1
+                      # We've consumed the entire while(true){...} block including its closing }
+                      # Now skip trailing whitespace-only lines
+                      while i < len(lines) and lines[i].strip() == '':
+                          i += 1
+                  else:
+                      # No while(true) block found right after marker; proceed normally
+                      pass
+              else:
+                  result.append(line)
+                  i += 1
+
+          with open("app/src/main/java/me/bmax/apatch/APatchApp.kt", "w") as f:
+              f.writelines(result)
+          PYEOF
+
+          echo "=== Verification: APatchApp.kt ==="
+          grep -n "SIGNATURE\|verifyAppSignature\|while (true)" "$FILE" || echo "(signature check bypassed)"
+          echo "=== Verification: LauncherIconUtils.kt ==="
+          grep -n "desktop_app_name" app/src/main/java/me/bmax/apatch/util/LauncherIconUtils.kt
 
       - name: Decode keystore
         run: |
@@ -163,14 +261,14 @@ jobs:
         run: |
           FILES=$(find artifacts -type f 2>/dev/null | sort)
           FILE_COUNT=$(echo "$FILES" | grep -c . || true)
-          
+
           if [ "$FILE_COUNT" -eq 0 ]; then
             echo "::error::No files found in artifacts"
             exit 1
           fi
-          
+
           CAPTION="${{ needs.prepare.outputs.commit_msg }}\nBranch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}\nAuthor: ${{ needs.prepare.outputs.commit_author }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          
+
           if [ "$FILE_COUNT" -eq 1 ]; then
             curl -sf -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument" \
               -F "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
@@ -181,7 +279,7 @@ jobs:
             while IFS= read -r f; do
               FILE_ARR+=("$f")
             done <<< "$FILES"
-            
+
             TOTAL=${#FILE_ARR[@]}
             MEDIA_JSON="["
             for i in "${!FILE_ARR[@]}"; do
@@ -196,15 +294,15 @@ jobs:
               fi
             done
             MEDIA_JSON+="]"
-            
+
             ARGS=(-X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMediaGroup")
             ARGS+=(-F "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}")
             ARGS+=(-F "media=${MEDIA_JSON}")
-            
+
             while IFS= read -r f; do
               FNAME=$(basename "$f")
               ARGS+=(-F "$FNAME=@$f")
             done <<< "$FILES"
-            
+
             curl -sf "${ARGS[@]}"
           fi
