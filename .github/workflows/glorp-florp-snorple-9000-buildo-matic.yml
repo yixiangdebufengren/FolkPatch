@@ -63,21 +63,21 @@ jobs:
         run: |
           if [ -f custom-icon.png ]; then
             find app/src/main/res/mipmap-anydpi-v26 -name "*.png" -delete 2>/dev/null || true
-            for dir in app/src/main/res/mipmap-*; do
-              case "$dir" in
-                *anydpi*) continue ;;
-              esac
-              cp custom-icon.png "$dir/ic_launcher.png" 2>/dev/null || true
-              cp custom-icon.png "$dir/ic_launcher_round.png" 2>/dev/null || true
-              cp custom-icon.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+            declare -A sizes=(
+              [app/src/main/res/mipmap-mdpi]=48
+              [app/src/main/res/mipmap-hdpi]=72
+              [app/src/main/res/mipmap-xhdpi]=96
+              [app/src/main/res/mipmap-xxhdpi]=144
+              [app/src/main/res/mipmap-xxxhdpi]=192
+            )
+            for dir in "${!sizes[@]}"; do
+              size=${sizes[$dir]}
+              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_round.png"
+              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_foreground.png"
+              convert custom-icon.png -resize "${size}x${size}" "$dir/ic_launcher_alt.png"
             done
-            for dir in app/src/main/res/mipmap-*; do
-              case "$dir" in
-                *anydpi*) continue ;;
-              esac
-              cp custom-icon.png "$dir/ic_launcher_alt.png" 2>/dev/null || true
-            done
-            echo "Icons replaced"
+            echo "Icons replaced (resized to proper densities)"
           else
             echo "No custom icon, using original"
           fi
